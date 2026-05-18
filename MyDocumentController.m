@@ -186,7 +186,6 @@ BOOL g_EnableLogging;
 - (void) applicationDidFinishLaunching:(NSNotification *)notification
 {
 }
-}
 
 #pragma mark -----------------NSMenu delegates-----------------------
 

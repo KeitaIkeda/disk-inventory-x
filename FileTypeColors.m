@@ -84,6 +84,9 @@
 
 - (NSColor *) colorForKind: (NSString*) kind
 {
+    if ( kind == nil )
+        kind = @"(unknown)";
+
     NSColor *color = [_colors objectForKey: kind];
 
     if ( color == nil )
