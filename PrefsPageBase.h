@@ -14,7 +14,10 @@
 //
 
 #import <Cocoa/Cocoa.h>
-#import <OmniAppKit/OAPreferenceClient.h>
 
-@interface PrefsPageBase : OAPreferenceClient
+@interface PrefsPageBase : NSObject
+
+- (void) restoreDefaultsNoPrompt;
+- (BOOL) haveAnyDefaultsChanged;
+
 @end

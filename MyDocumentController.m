@@ -76,7 +76,11 @@ BOOL g_EnableLogging;
 
 - (void) openDocumentWithContentsOfFile: (NSString*) fileName
 {
-	[self openDocumentWithContentsOfFile: fileName display: [self shouldCreateUI]];
+	NSURL *fileURL = [NSURL fileURLWithPath: fileName];
+	[self openDocumentWithContentsOfURL: fileURL display: YES completionHandler:^(NSDocument *document, BOOL documentWasAlreadyOpen, NSError *error) {
+		if ( error != nil )
+			[self presentError: error];
+	}];
 }
 
 - (BOOL) applicationShouldOpenUntitledFile: (NSApplication*) sender
@@ -88,13 +92,9 @@ BOOL g_EnableLogging;
 - (id)makeDocumentWithContentsOfFile:(NSString *)fileName ofType:(NSString *)docType
 {
 	//check whether "fileName" is a folder
-	NSDictionary *attribs = [[NSFileManager defaultManager] fileAttributesAtPath: fileName traverseLink: NO];
-    if ( attribs != nil )
-	{
-		NSString *type = [attribs fileType];
-		if ( type != nil && [type isEqualToString: NSFileTypeDirectory] )
-			return [super makeDocumentWithContentsOfFile:fileName ofType: @"Folder"];
-	}
+	BOOL isDir = NO;
+	if ( [[NSFileManager defaultManager] fileExistsAtPath: fileName isDirectory: &isDir] && isDir )
+		return [super makeDocumentWithContentsOfFile:fileName ofType: @"Folder"];
 	
 	return nil;
 }

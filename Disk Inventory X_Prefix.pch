@@ -4,10 +4,14 @@
 
 #ifdef __OBJC__
     #import <Cocoa/Cocoa.h>
-    #import <Carbon/Carbon.h>
 
-    #import <OmniBase/OmniBase.h>
+	// OmniBase replacement macros
+	#define OBPRECONDITION(condition) NSAssert((condition), @"PRECONDITION failed: " #condition)
+	#define OBASSERT(condition) NSAssert((condition), @"ASSERT failed: " #condition)
+	#define OBPOSTCONDITION(condition) NSAssert((condition), @"POSTCONDITION failed: " #condition)
 
+	// OmniFoundation replacement categories
+	#import "OmniReplacements.h"
 
 	//global variable which enables/disables logging
 	extern BOOL g_EnableLogging;

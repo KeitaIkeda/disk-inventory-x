@@ -14,13 +14,13 @@
 //
 
 #import <Cocoa/Cocoa.h>
-#import <OmniAppKit/OAPreferenceController.h>
 
-
-@interface PrefsPanelController : OAPreferenceController {
-
-}
+@interface PrefsPanelController : NSWindowController
 
 + (PrefsPanelController*) sharedPreferenceController;
++ (void)registerItemName:(NSString *)itemName bundle:(NSBundle *)bundle description:(NSDictionary *)description;
++ (NSArray *) allClientRecords;
+
+- (void) showPreferencesPanel;
 
 @end

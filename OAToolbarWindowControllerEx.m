@@ -14,8 +14,6 @@
 //
 
 #import "OAToolbarWindowControllerEx.h"
-#import <OmniFoundation/NSString-OFExtensions.h>
-#import <OmniAppKit/OAToolbarItem.h>
 
 @implementation NSToolbarItemValidationAdapter
 
@@ -24,6 +22,12 @@
 	[toolbarItem retain];
 	[_toolbarItem release];
 	_toolbarItem = toolbarItem;
+}
+
+- (void) dealloc
+{
+	[_toolbarItem release];
+	[super dealloc];
 }
 
 - (void) forwardInvocation: (NSInvocation*) anInvocation
@@ -48,10 +52,7 @@
 - (void)setState:(int)itemState
 {
 	OAToolbarWindowControllerEx *controller = (OAToolbarWindowControllerEx *)[[_toolbarItem toolbar] delegate];
-/*
-	NSAssert( [controller isKindOfClass: [OAToolbarWindowControllerEx class]],
-		@"delegate of toolbar must be a subclass of 'OAToolbarWindowControllerEx'" );
-	*/
+
     if ( [controller respondsToSelector:@selector(toolbar:imageForToolbarItem:forState:)] )
     {
         NSImage *image = [controller toolbar: [_toolbarItem toolbar]
@@ -76,6 +77,9 @@ static NSToolbarItemValidationAdapter *g_toolbarItemValidationAdapter = nil;
 static NSMutableDictionary *g_toolbatStateImages = nil;
 
 @implementation OAToolbarWindowControllerEx
+{
+    NSDictionary *_toolbarConfig;
+}
 
 #pragma mark -----------------Toolbar support---------------------
 
@@ -85,8 +89,100 @@ static NSMutableDictionary *g_toolbatStateImages = nil;
 	g_toolbatStateImages = [[NSMutableDictionary alloc] init];
 }
 
-//returns an image for a toolbar item with a specific state (NSOnState, NSOffState, NSMixedState like menu items)
-- (NSImage*) toolbar: (NSToolbar*) theToolbar imageForToolbarItem: (NSToolbarItem*) item forState: (int) state; 
+- (NSDictionary *) loadToolbarConfig
+{
+    if ( _toolbarConfig == nil )
+    {
+        NSString *name = [self toolbarConfigurationName];
+        NSString *path = [[NSBundle mainBundle] pathForResource: name ofType: @"toolbar"];
+        if ( path != nil )
+            _toolbarConfig = [[NSDictionary dictionaryWithContentsOfFile: path] retain];
+    }
+    return _toolbarConfig;
+}
+
+- (void) dealloc
+{
+    [_toolbarConfig release];
+    [super dealloc];
+}
+
+- (NSString *) toolbarConfigurationName
+{
+    // Subclasses override this
+    return @"";
+}
+
+- (NSDictionary *) toolbarInfoForItem: (NSString *) identifier
+{
+    NSDictionary *config = [self loadToolbarConfig];
+    NSDictionary *itemInfoByIdentifier = [config objectForKey: @"itemInfoByIdentifier"];
+    NSMutableDictionary *itemInfo = [NSMutableDictionary dictionaryWithDictionary: [itemInfoByIdentifier objectForKey: identifier]];
+
+    // Localize existing strings
+#define LOCALIZE_PROPERTY( propname )									\
+    if ( ![NSString isEmptyString: [itemInfo objectForKey: propname]] )	\
+    {																	\
+        NSString *localized = NSLocalizedString( [itemInfo objectForKey: propname], @"" ); \
+        [itemInfo setObject: localized forKey: propname];				\
+    }
+    
+    LOCALIZE_PROPERTY( @"label" );
+    LOCALIZE_PROPERTY( @"paletteLabel" );
+    LOCALIZE_PROPERTY( @"toolTip" );
+    
+#undef LOCALIZE_PROPERTY
+
+    // Try to get the title and tooltip from the menu
+    NSString *actionString = [itemInfo objectForKey:@"action"];
+    if ( ![NSString isEmptyString: actionString] && [actionString characterAtIndex: [actionString length] -1] != ':' )
+    {
+        actionString = [actionString stringByAppendingString: @":"];
+        [itemInfo setObject: actionString forKey:@"action"];
+    }
+    
+    SEL action = NSSelectorFromString( actionString );
+    
+    if ( action != 0
+         && ( [itemInfo objectForKey:@"label"] == nil || [itemInfo objectForKey:@"toolTip"] == nil ) )
+    {
+        NSMenuItem * menuItem = [[NSApp mainMenu] menuItemWithAction: action];
+        if ( menuItem != nil )
+        {
+            // set label?
+            if ( [itemInfo objectForKey:@"label"] == nil && ![NSString isEmptyString: [menuItem title]] )
+            {
+                NSString *title = [menuItem title];
+                unsigned numOfRemainingChars = (unsigned)[title length];
+                unichar lastChar;
+                do
+                {
+                    numOfRemainingChars--;
+                    lastChar = [title characterAtIndex: numOfRemainingChars];
+                }
+                while ( ( lastChar == '.' || isspace(lastChar) ) && numOfRemainingChars > 0 );
+                title = [title substringToIndex: numOfRemainingChars+1];
+                
+                [itemInfo setObject: title forKey: @"label"];
+            }
+            // set tooltip?
+            if ( [itemInfo objectForKey:@"toolTip"] == nil && ![NSString isEmptyString: [menuItem toolTip]] )
+                [itemInfo setObject: [menuItem toolTip] forKey: @"toolTip"];
+        }
+    }
+    
+    // if no string for "paletteLabel" is set, use the one for "label"
+    if ( [itemInfo objectForKey:@"paletteLabel"] == nil )
+    {
+        if ( [itemInfo objectForKey:@"label"] != nil )
+            [itemInfo setObject: [itemInfo objectForKey:@"label"] forKey: @"paletteLabel"];
+    }
+    
+    return itemInfo;
+}
+
+//returns an image for a toolbar item with a specific state
+- (NSImage*) toolbar: (NSToolbar*) theToolbar imageForToolbarItem: (NSToolbarItem*) item forState: (int) state
 {
 	NSString *imageKey = nil;
 	switch( state )
@@ -104,7 +200,7 @@ static NSMutableDictionary *g_toolbatStateImages = nil;
 			NSAssert( NO, @"invalid item state for ToolbarItem" );
 	}
 	
-	//get the image cache for our toolbar
+	// get the image cache for our toolbar
 	NSMutableDictionary *toolbarImageCache = [g_toolbatStateImages objectForKey: [self toolbarConfigurationName]];
 	if ( toolbarImageCache == nil )
 	{
@@ -112,7 +208,7 @@ static NSMutableDictionary *g_toolbatStateImages = nil;
 		[g_toolbatStateImages setObject: toolbarImageCache forKey: [self toolbarConfigurationName]];
 	}
 	
-	//get image cache for the toolbar item
+	// get image cache for the toolbar item
 	NSMutableDictionary *itemImageCache = [toolbarImageCache objectForKey: [item itemIdentifier]];
 	if ( itemImageCache == nil )
 	{
@@ -120,17 +216,16 @@ static NSMutableDictionary *g_toolbatStateImages = nil;
 		[toolbarImageCache setObject: itemImageCache forKey: [item itemIdentifier]];
 	}
 	
-	//get the state image from the toolbar item image cache
+	// get the state image from the toolbar item image cache
 	NSImage *image = [itemImageCache objectForKey: imageKey];
 	if ( image == nil )
 	{
-		//we call super's implementation as we don't need the menu synchronisation stuff (see above)
-		NSDictionary *itemInfo = [super toolbarInfoForItem: [item itemIdentifier]];
+		NSDictionary *itemInfoDict = [self toolbarInfoForItem: [item itemIdentifier]];
 		
-		//get image name from info dictionary
-		NSString *imageName = [itemInfo objectForKey: imageKey];
+		// get image name from info dictionary
+		NSString *imageName = [itemInfoDict objectForKey: imageKey];
 		if ( imageName == nil )
-			imageName = [itemInfo objectForKey: @"imageName"];
+			imageName = [itemInfoDict objectForKey: @"imageName"];
 		
 		NSAssert1( imageName != nil, @"no image name for item '%@'", [item itemIdentifier] );
 		
@@ -143,124 +238,87 @@ static NSMutableDictionary *g_toolbatStateImages = nil;
 	return image;
 }
 
-- (NSDictionary *)toolbarInfoForItem:(NSString *)identifier;
+- (void) windowDidLoad
 {
-	NSMutableDictionary *itemInfo = [NSMutableDictionary dictionaryWithDictionary: [super toolbarInfoForItem: identifier]];
-	
-	//localize existing strings
-#define LOCALIZE_PROPERTY( propname )									\
-	if ( ![NSString isEmptyString: [itemInfo objectForKey: propname]] )	\
-	{																	\
-		NSString *localized = NSLocalizedString( [itemInfo objectForKey: propname], @"" ); \
-		[itemInfo setObject: localized forKey: propname];				\
-	}
-	
-	LOCALIZE_PROPERTY( @"label" );
-	LOCALIZE_PROPERTY( @"paletteLabel" );
-	LOCALIZE_PROPERTY( @"toolTip" );
-	
-#undef LOCALIZE_PROPERTY
-	
-	//We now try get the title and tooltip for the toolbar item from the menu.
-	//This is done by searching for a menu item with the same action as the toolbar item.
-	//Doing this, we don't need to type indentical strings in both the menu resource and the toolbar resource (.toolbar plist file).
-	//And they only need to be localized in one place!
-	
-	NSString *actionString = [itemInfo objectForKey:@"action"];
-	//did someone forgot the ':' at the end of the string? (actions always have the sender as a parameter)
-	if ( ![NSString isEmptyString: actionString] && [actionString characterAtIndex: [actionString length] -1] != ':' )
-	{
-		actionString = [actionString stringByAppendingString: @":"];
-		[itemInfo setObject: actionString forKey:@"action"];
-	}
-	
-	SEL action = NSSelectorFromString( actionString );
-	
-	if (  action != 0
-		  && ( [itemInfo objectForKey:@"label"] == nil || [itemInfo objectForKey:@"toolTip"] == nil ) )
-	{
-		NSMenuItem * menuItem = [[NSApp mainMenu] menuItemWithAction: action];
-		if ( menuItem != nil )
-		{
-			//set label?
-			if ( [itemInfo objectForKey:@"label"] == nil && ![NSString isEmptyString: [menuItem title]] )
-			{
-				//delete periods at end of title (e.g. "Preferences...")
-				NSString *title = [menuItem title];
-				unsigned numOfRemainingChars = [title length];
-				unichar lastChar;
-				do
-				{
-					numOfRemainingChars--;
-					lastChar = [title characterAtIndex: numOfRemainingChars];
-				}
-				while ( ( lastChar == '.' || isspace(lastChar) ) && numOfRemainingChars > 0 );
-				title = [title substringToIndex: numOfRemainingChars+1];
-				
-				[itemInfo setObject: title forKey: @"label"];
-			}
-			//set tooltip?
-			if ( [itemInfo objectForKey:@"toolTip"] == nil && ![NSString isEmptyString: [menuItem toolTip]] )
-				[itemInfo setObject: [menuItem toolTip] forKey: @"toolTip"];
-		}
-	}
-	
-	//if no string for "paletteLabel" is set, use the one for "toolTip" or "label"
-	//(the paletteLabel is used as the toolbar item's title in the customizable sheet)
-	if ( [itemInfo objectForKey:@"paletteLabel"] == nil )
-	{
-/*		if ( [itemInfo objectForKey:@"toolTip"] != nil )
-			[itemInfo setObject: [itemInfo objectForKey:@"toolTip"] forKey: @"paletteLabel"];
-		else*/ if ( [itemInfo objectForKey:@"label"] != nil )
-			[itemInfo setObject: [itemInfo objectForKey:@"label"] forKey: @"paletteLabel"];
-	}
-	
-    return itemInfo;
-}
-
-// NSObject (NSToolbarDelegate) subclass 
-
-- (NSToolbarItem *)toolbar:(NSToolbar *)aToolbar itemForItemIdentifier:(NSString *)itemIdentifier willBeInsertedIntoToolbar:(BOOL)willInsert
-{
-	NSToolbarItem *toolbarItem = [super toolbar: aToolbar itemForItemIdentifier: itemIdentifier willBeInsertedIntoToolbar: willInsert];
-  
-    // OmniAppKit loads the localized label and tooltip for the toolbar item from a special file.
-    // From OAToolbarWindowController.m:
-    /*
-     Toolbar item names should be localized in "<toolbarName>.strings" in the same bundle as the .toolbar file.  Each display aspect of the item has its own key (currently 'label', 'paletteLabel', etc).  The search order for the localized name is:
-     
-     1: strings file "<toolbarName>" with key "<identifier>.<displayKey>"
-     2: strings file "<toolbarName>" with key "<identifier>"
-     3: item dictionary with key "<identifier>"; this is only for backwards compatibility and will hit an assertion
-     
-     */
+    [super windowDidLoad];
     
-    // As we take labels and toolTips over from the corresponding menu item, we do not need
-    // this special toolbar strings file.
-    if ( [toolbarItem toolTip] == nil )
+    NSString *toolbarName = [self toolbarConfigurationName];
+    if ( ![NSString isEmptyString: toolbarName] )
     {
-        NSDictionary *itemInfo = [self toolbarInfoForItem:itemIdentifier];
-        NSString *toolTip = [itemInfo objectForKey:@"toolTip"];
-        if ( toolTip != nil )
-            [toolbarItem setToolTip:toolTip];
+        NSToolbar *toolbar = [[[NSToolbar alloc] initWithIdentifier: toolbarName] autorelease];
+        [toolbar setDelegate: self];
+        [toolbar setAllowsUserCustomization: YES];
+        [toolbar setAutosavesConfiguration: YES];
+        [[self window] setToolbar: toolbar];
     }
-
-    //NSToolbarItem calls it's target to validate itself (through validateToolbarItem:).
-	//If the target is not self we have no control over the validation.
-	//This "problem" can be solved to set ourself as the delegate. OAToolbarItem's delegate
-	//has the last word in the validation process.
-	//(OAToolbarWindowController does this only for items with a custom view).
-    [(OAToolbarItem*)toolbarItem setDelegate: self];
-	
-	return toolbarItem;
 }
 
-// if a toolbar item description contains a "target" property,
-// OAToolbarWindowController resolves the target by calling valueForKeyPath.
-// So for every target besides the window controller ("target" not set) or
-// the first responder ("target" property == "firstResponder"), the toolbar delegate
-// has to declare a property.
-// We declare two: "documentController" and "application"
+#pragma mark - NSToolbarDelegate
+
+- (NSToolbarItem *)toolbar:(NSToolbar *)toolbar itemForItemIdentifier:(NSString *)itemIdentifier willBeInsertedIntoToolbar:(BOOL)flag
+{
+    NSToolbarItem *toolbarItem = [[[NSToolbarItem alloc] initWithItemIdentifier: itemIdentifier] autorelease];
+    
+    NSDictionary *itemInfo = [self toolbarInfoForItem: itemIdentifier];
+    
+    // Set label
+    NSString *label = [itemInfo objectForKey: @"label"];
+    if ( label != nil )
+    {
+        [toolbarItem setLabel: label];
+        [toolbarItem setPaletteLabel: label];
+    }
+    
+    NSString *paletteLabel = [itemInfo objectForKey: @"paletteLabel"];
+    if ( paletteLabel != nil )
+        [toolbarItem setPaletteLabel: paletteLabel];
+    
+    // Set tooltip
+    NSString *toolTip = [itemInfo objectForKey: @"toolTip"];
+    if ( toolTip != nil )
+        [toolbarItem setToolTip: toolTip];
+    
+    // Set image
+    NSString *imageName = [itemInfo objectForKey: @"imageName"];
+    if ( imageName != nil )
+    {
+        NSImage *image = [NSImage imageNamed: imageName];
+        if ( image != nil )
+            [toolbarItem setImage: image];
+    }
+    
+    // Set action
+    NSString *actionString = [itemInfo objectForKey: @"action"];
+    if ( ![NSString isEmptyString: actionString] )
+    {
+        SEL action = NSSelectorFromString( actionString );
+        [toolbarItem setAction: action];
+    }
+    
+    // Set target
+    NSString *targetString = [itemInfo objectForKey: @"target"];
+    if ( ![NSString isEmptyString: targetString] )
+    {
+        id target = [self valueForKeyPath: targetString];
+        [toolbarItem setTarget: target];
+    }
+    
+    return toolbarItem;
+}
+
+- (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar
+{
+    NSDictionary *config = [self loadToolbarConfig];
+    return [config objectForKey: @"allowedItemIdentifiers"];
+}
+
+- (NSArray *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar
+{
+    NSDictionary *config = [self loadToolbarConfig];
+    return [config objectForKey: @"defaultItemIdentifiers"];
+}
+
+#pragma mark - Properties for toolbar target resolution
 
 - (NSDocumentController*) documentController
 {
@@ -272,10 +330,9 @@ static NSMutableDictionary *g_toolbatStateImages = nil;
     return NSApp;
 }
 
+#pragma mark - NSObject (NSToolbarItemValidation)
 
-// NSObject (NSToolbarItemValidation)
-
-- (BOOL)validateToolbarItem:(NSToolbarItem *)theItem;
+- (BOOL)validateToolbarItem:(NSToolbarItem *)theItem
 {
     if ( ![[self window] isKeyWindow] )
 		return NO;
@@ -285,18 +342,20 @@ static NSMutableDictionary *g_toolbatStateImages = nil;
 	return [self validateMenuItem: (NSMenuItem*) g_toolbarItemValidationAdapter];
 }
 
+- (BOOL) validateMenuItem: (NSMenuItem*) menuItem
+{
+    // Subclasses override this
+    return YES;
+}
+
 @end
 
 
 @implementation NSMenu(FindExtensions)
 
-//linear search through all menu items (including sub menus)
 - (NSMenuItem*) menuItemWithAction: (SEL) action
 {
-	//we enumerate backwards as for the main menu bar the more application specific actions
-	//are often in the menus after "File" and "Edit", so it is more likely to find the
-	//item in question in the rear menus (this may not apply to sub menus, but we do a linar search anyway) 
-	int i = [self numberOfItems];
+	int i = (int)[self numberOfItems];
 	while ( i-- )
 	{
 		NSMenuItem *menuItem = [self itemAtIndex: i];
@@ -312,9 +371,7 @@ static NSMutableDictionary *g_toolbatStateImages = nil;
 		}
 	}
 	
-	//not found
 	return nil;
 }
 
 @end
-

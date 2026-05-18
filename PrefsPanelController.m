@@ -14,13 +14,8 @@
 //
 
 #import "PrefsPanelController.h"
-#import <OmniAppKit/OAPreferenceClientRecord.h>
-#import <OmniAppKit/OAPreferenceClient.h>
 
-@interface OAPreferenceController(MakeVisible)
-- (void)_restoreDefaultsSheetDidEnd:(NSWindow *)sheet returnCode:(int)returnCode contextInfo:(void *)contextInfo;
-+ (void)registerItemName:(NSString *)itemName bundle:(NSBundle *)bundle description:(NSDictionary *)description;
-@end
+static NSMutableArray *g_clientRecords = nil;
 
 @implementation PrefsPanelController
 
@@ -34,52 +29,26 @@
 	return sharedPreferenceController;
 }
 
-+ (void)registerItemName:(NSString *)itemName bundle:(NSBundle *)bundle description:(NSDictionary *)description;
++ (void)registerItemName:(NSString *)itemName bundle:(NSBundle *)bundle description:(NSDictionary *)description
 {
-	[super registerItemName: itemName bundle: bundle description: description];
+    if ( g_clientRecords == nil )
+        g_clientRecords = [[NSMutableArray alloc] init];
+    
+    NSMutableDictionary *record = [NSMutableDictionary dictionaryWithDictionary: description];
+    [record setObject: itemName forKey: @"itemName"];
+    [g_clientRecords addObject: record];
 }
 
-
-- (void)_restoreDefaultsSheetDidEnd:(NSWindow *)sheet returnCode:(int)returnCode contextInfo:(void *)contextInfo;
++ (NSArray *) allClientRecords
 {
-    if (returnCode != NSAlertDefaultReturn)
-        return;
-	
-    if (contextInfo != NULL)
-	{
-        // warn & wipe the entire defaults domain
-		[super _restoreDefaultsSheetDidEnd: sheet returnCode: returnCode contextInfo: contextInfo];
-    }
-	else
-	{
-        // warn & wipe all prefs shown in all pages
-        NSEnumerator *clientEnumerator;
-        OAPreferenceClientRecord *aClientRecord;
-		
-		NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
-        
-		//the preferences shown in each page must be declared proberly in info.plist!
-		
-        clientEnumerator = [[self.class allClientRecords] objectEnumerator];
-        while ((aClientRecord = [clientEnumerator nextObject])) {
-            NSArray *preferenceKeys;
-            NSEnumerator *keyEnumerator;
-            NSString *aKey;
-			
-            preferenceKeys = [[NSArray array] arrayByAddingObjectsFromArray:[[aClientRecord defaultsDictionary] allKeys]];
-            preferenceKeys = [preferenceKeys arrayByAddingObjectsFromArray:[aClientRecord defaultsArray]];
-            keyEnumerator = [preferenceKeys objectEnumerator];
-            while ((aKey = [keyEnumerator nextObject])) 
-			{
-				[prefs willChangeValueForKey: aKey];
-                [prefs removeObjectForKey: aKey];
-				[prefs didChangeValueForKey: aKey];
-			}
-        }
-    }
-    
-#pragma warning "code diabled"
-    //[nonretained_currentClient valuesHaveChanged];
+    return g_clientRecords ? g_clientRecords : [NSArray array];
+}
+
+- (void) showPreferencesPanel
+{
+    // Minimal implementation - show preferences window
+    // The original used OmniAppKit's preference panel system.
+    // For now, this is a stub that can be expanded later.
 }
 
 @end

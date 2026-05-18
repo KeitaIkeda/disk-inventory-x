@@ -14,7 +14,6 @@
 //
 
 #import <Cocoa/Cocoa.h>
-#import <OmniAppKit/OAToolbarWindowController.h>
 
 @interface NSToolbarItemValidationAdapter : NSObject
 {
@@ -26,11 +25,12 @@
 
 @end
 
-@interface OAToolbarWindowControllerEx : OAToolbarWindowController {
+@interface OAToolbarWindowControllerEx : NSWindowController <NSToolbarDelegate>
 
-}
-
+- (NSString *) toolbarConfigurationName;
+- (NSDictionary *) toolbarInfoForItem: (NSString *) identifier;
 - (NSImage*) toolbar: (NSToolbar*) theToolbar imageForToolbarItem: (NSToolbarItem*) item forState: (int) state;
+- (BOOL) validateMenuItem: (NSMenuItem*) menuItem;
 
 // properties to resolve "target" value for tool items
 @property (readonly) NSDocumentController *documentController;

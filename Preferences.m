@@ -8,8 +8,6 @@
  */
 
 #include "Preferences.h"
-#import <OmniFoundation/NSDictionary-OFExtensions.h>
-#import <OmniFoundation/NSMutableDictionary-OFExtensions.h>
 
 //keys for preference values
 NSString *ShowPackageContents			= @"ShowPackageContents";

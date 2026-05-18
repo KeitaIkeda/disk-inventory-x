@@ -425,19 +425,12 @@
 {
     NSString* perm = @"";
 
-    // get mode bits
-    // [NSFileManager attributesOfItemAtPath:error:] provides the permission bits ([NSFileAttributes filePosixPermissions]),
-    // but not the complete mode bits; so use the carbon functions instead ...
-    
-    FSRef ref;
-    if ( FSPathMakeRef((const UInt8*)[URL fileSystemRepresentation], &ref, nil) != noErr )
+    // get mode bits using stat() instead of deprecated Carbon FSRef APIs
+    struct stat fileStat;
+    if ( stat([[URL path] fileSystemRepresentation], &fileStat) != 0 )
         return perm;
     
-    FSCatalogInfo catalogInfo;
-    if ( FSGetCatalogInfo(&ref, kFSCatInfoPermissions, &catalogInfo, NULL, NULL, NULL) != noErr )
-        return perm;
-    
-    UInt16 modeBits = catalogInfo.permissions.mode;
+    UInt16 modeBits = fileStat.st_mode;
     UInt16 permBits = (modeBits & ACCESSPERMS);
     
     if (S_ISDIR(modeBits))

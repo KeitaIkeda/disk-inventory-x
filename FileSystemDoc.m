@@ -22,7 +22,6 @@
 #import "Timing.h"
 #import "InfoPanelController.h"
 #import "FSItem-Utilities.h"
-#import <OmniFoundation/NSArray-OFExtensions.h>
 #import "NSFileManager-Extensions.h"
 
 NSString *CollectFileKindStatisticsCanceledException = @"CollectFileKindStatisticsCanceledException";
