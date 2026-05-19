@@ -472,7 +472,7 @@ NSString* FSItemLoadingFailedException = @"FSItemLoadingFailedException";
 	    if ( _kindName == nil )
 			[self setKindString];
 		
-		return _kindName;
+		return _kindName != nil ? _kindName : @"";
 	}
 	else
 		return @"";
@@ -566,24 +566,36 @@ NSString* FSItemLoadingFailedException = @"FSItemLoadingFailedException";
  */
     NSString *uti = [[self fileURL] cachedUTI];
     
-    if ( g_kindNameDictionary == nil )
-        g_kindNameDictionary = [[NSMutableDictionary alloc] init];
-
-    _kindName = [[g_kindNameDictionary objectForKey: uti] retain];
-
-    if ( _kindName == nil )
+    if ( uti == nil )
     {
-        _kindName = (NSString*) UTTypeCopyDescription((CFStringRef)uti);
-        
-        //remember kind name for similar files
-        if ( _kindName != nil )
-            [g_kindNameDictionary setObject: _kindName forKey: uti];
-     }
-
-    if ( _kindName == nil )
-    {
+        // UTI could not be determined (e.g. broken symlink, inaccessible file)
+        // Fall back to localized type description or a generic label
         _kindName = [[self fileURL] getCachedStringValue: NSURLLocalizedTypeDescriptionKey];
+        if ( _kindName == nil )
+            _kindName = @"Document";
         [_kindName retain];
+    }
+    else
+    {
+        if ( g_kindNameDictionary == nil )
+            g_kindNameDictionary = [[NSMutableDictionary alloc] init];
+
+        _kindName = [[g_kindNameDictionary objectForKey: uti] retain];
+
+        if ( _kindName == nil )
+        {
+            _kindName = (NSString*) UTTypeCopyDescription((CFStringRef)uti);
+            
+            //remember kind name for similar files
+            if ( _kindName != nil )
+                [g_kindNameDictionary setObject: _kindName forKey: uti];
+        }
+
+        if ( _kindName == nil )
+        {
+            _kindName = [[self fileURL] getCachedStringValue: NSURLLocalizedTypeDescriptionKey];
+            [_kindName retain];
+        }
     }
     
     //let our childs do the same
